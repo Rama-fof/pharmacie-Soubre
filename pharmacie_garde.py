@@ -1,220 +1,303 @@
 # -*- coding: utf-8 -*-
 """
-Created on Tue Aug 18 14:11:48 2026
-
+Created on Tue Aug 18 2026
 @author: ramat
+Version finale — Supabase + esthétique responsive + sélection de date corrigée
 """
 
-import os
-import sqlite3
-from datetime import date, datetime, timedelta
+from datetime import date, timedelta
 from urllib.parse import quote
 import streamlit as st
+from supabase import create_client, Client
 
 # =========================================================
-# CONFIGURATION ET THÈME DE LA PAGE
+# CONFIGURATION (doit être la toute première commande Streamlit)
 # =========================================================
+
 st.set_page_config(
     page_title="Pharmacies de garde - Soubré", page_icon="💊", layout="centered"
 )
 
-# Injection CSS globale : Force le fond bleu/gris et nettoie le design
+# =========================================================
+# CONNEXION SUPABASE
+# =========================================================
+
+@st.cache_resource
+def init_supabase() -> Client:
+    url = st.secrets["supabase_url"]
+    key = st.secrets["supabase_key"]
+    return create_client(url, key)
+
+supabase = init_supabase()
+
+
+def chercher_pharmacie_du_jour(date_cible):
+    """Récupère les informations depuis Supabase."""
+    date_str = date_cible.strftime("%Y-%m-%d")
+    reponse = supabase.table("gardes").select("*").eq("date", date_str).execute()
+    if reponse.data:
+        ligne = reponse.data[0]
+        return {
+            "nom": ligne["nom"],
+            "telephone": ligne["telephone"],
+            "adresse": ligne["adresse"],
+            "horaires": ligne["horaires"],
+        }
+    return None
+
+
+def enregistrer_pharmacie(date_cible, nom, telephone, adresse, horaires):
+    """Ajoute ou met à jour une garde dans Supabase."""
+    date_str = date_cible.strftime("%Y-%m-%d")
+    supabase.table("gardes").upsert({
+        "date": date_str,
+        "nom": nom,
+        "telephone": telephone,
+        "adresse": adresse,
+        "horaires": horaires,
+    }).execute()
+
+
+# =========================================================
+# STYLE — ESTHÉTIQUE + RESPONSIVE MOBILE
+# =========================================================
+
 st.markdown(
     """
 <style>
     .stApp {
-        background-color: #eef5f9 !important;
+        background: linear-gradient(160deg, #eaf3fb 0%, #dceaf7 45%, #f5f9fd 100%);
     }
-    header {visibility: hidden;}
-    footer {visibility: hidden;}
+
+    .main { padding-top: 1.5rem; }
+
+    .titre {
+        font-size: 40px;
+        font-weight: 800;
+        text-align: center;
+        margin-bottom: 4px;
+        color: #0b3d66;
+    }
+    .sous-titre {
+        text-align: center;
+        color: #2c5578;
+        font-size: 16px;
+        margin-bottom: 28px;
+        font-weight: 500;
+    }
+
+    .carte-pharmacie {
+        padding: 28px;
+        border-radius: 18px;
+        border: 1px solid #b8d4ec;
+        background-color: #ffffff;
+        box-shadow: 0 4px 14px rgba(11, 61, 102, 0.10);
+        margin-top: 20px;
+        margin-bottom: 20px;
+        transition: transform 0.2s ease;
+    }
+    .carte-pharmacie:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(11, 61, 102, 0.16);
+    }
+
+    .nom-pharmacie {
+        font-size: 26px;
+        font-weight: 800;
+        margin-bottom: 6px;
+        color: #0b1f33;
+    }
+    .statut {
+        display: inline-block;
+        background-color: #1565c0;
+        color: #ffffff;
+        padding: 4px 14px;
+        border-radius: 20px;
+        font-size: 13px;
+        font-weight: 700;
+        margin-bottom: 18px;
+    }
+    .information {
+        font-size: 16px;
+        margin: 10px 0;
+        color: #1a1a1a;
+        font-weight: 500;
+    }
+
+    .information-importante {
+        padding: 16px;
+        border-radius: 12px;
+        background-color: #ffffff;
+        margin-top: 25px;
+        font-size: 14px;
+        color: #1a1a1a;
+        border-left: 4px solid #1565c0;
+    }
+
+    @media (max-width: 640px) {
+        .titre { font-size: 30px; }
+        .sous-titre { font-size: 14px; }
+        .carte-pharmacie { padding: 18px; border-radius: 14px; }
+        .nom-pharmacie { font-size: 21px; }
+        .information { font-size: 14px; }
+    }
+
+    /* ===== ÉLÉMENTS NATIFS STREAMLIT — meilleure lisibilité ===== */
+    h3 {
+        color: #0b3d66 !important;
+        font-size: 24px !important;
+        font-weight: 700 !important;
+    }
+    label, .stDateInput label, .stTextInput label {
+        font-size: 17px !important;
+        color: #0b1f33 !important;
+        font-weight: 600 !important;
+    }
+    div[data-testid="stMarkdownContainer"] p {
+        font-size: 17px !important;
+        color: #0b1f33 !important;
+    }
+    button p {
+        font-size: 16px !important;
+        font-weight: 700 !important;
+    }
+    div[data-testid="stAlert"] p {
+        font-size: 16px !important;
+        font-weight: 500 !important;
+    }
+    input {
+        font-size: 16px !important;
+        color: #0b1f33 !important;
+    }
+    /* Labels des champs du formulaire admin */
+    [data-testid="stWidgetLabel"] p {
+        font-size: 16px !important;
+        color: #0b1f33 !important;
+        font-weight: 600 !important;
+    }
+    /* Texte des placeholders dans les champs */
+    input::placeholder {
+        color: #6b7f94 !important;
+        opacity: 1 !important;
+    }
+    /* Caption en pied de page */
+    [data-testid="stCaptionContainer"] p, .stCaption p {
+        font-size: 13px !important;
+        color: #4a6178 !important;
+        font-weight: 500 !important;
+    }
+    /* Texte gras dans l'encadré information */
+    .information-importante b {
+        color: #0b3d66 !important;
+    }
 </style>
 """,
     unsafe_allow_html=True,
 )
 
-
 # =========================================================
-# INITIALISATION BASE DE DONNÉES SQLite
+# TITRE
 # =========================================================
-def initialiser_base_de_donnees():
-    conn = sqlite3.connect("pharmacies_soubre.db")
-    cursor = conn.cursor()
-    cursor.execute(
-        """
-    CREATE TABLE IF NOT EXISTS gardes (
-        date TEXT PRIMARY KEY,
-        nom TEXT NOT NULL,
-        telephone TEXT NOT NULL,
-        adresse TEXT NOT NULL,
-        horaires TEXT NOT NULL
-    )
-    """
-    )
 
-    # Données par défaut initiales pour Soubré
-    donnees_initiales = [
-        (
-            "2026-08-19",
-            "Pharmacie du Marché",
-            "+225 07 11 11 11 11",
-            "Marché de Soubré",
-            "08h00 - 22h00",
-        ),
-        (
-            "2026-08-20",
-            "Pharmacie Saint-Michel",
-            "+225 07 22 22 22 22",
-            "Quartier Saint-Michel, Soubré",
-            "08h00 - 22h00",
-        ),
-    ]
-    # Correction ici : Utilisation de la bonne variable pour l'insertion
-    cursor.executemany(
-        "INSERT OR IGNORE INTO gardes VALUES (?, ?, ?, ?, ?)", donnees_initiales
-    )
-    conn.commit()
-    conn.close()
-
-
-def chercher_pharmacie_du_jour(date_cible):
-    conn = sqlite3.connect("pharmacies_soubre.db")
-    cursor = conn.cursor()
-    date_str = date_cible.strftime("%Y-%m-%d")
-    cursor.execute(
-        "SELECT nom, telephone, adresse, horaires FROM gardes WHERE date = ?",
-        (date_str,),
-    )
-    ligne = cursor.fetchone()
-    conn.close()
-
-    if ligne:
-        return {
-            "nom": ligne[0],
-            "telephone": ligne[1],
-            "adresse": ligne[2],
-            "horaires": ligne[3],
-        }
-    return None
-
-
-# Lancement automatique de la BDD
-initialiser_base_de_donnees()
-
-# =========================================================
-# INTERFACE EN-TÊTE
-# =========================================================
+st.markdown('<div class="titre">💊 Pharmacie de garde</div>', unsafe_allow_html=True)
 st.markdown(
-    """
-    <div style="text-align:center; padding:10px;">
-        <h1 style="color:#1e3d59; font-size:36px; margin-bottom:0px; font-weight:700;">💊 Pharmacie de garde</h1>
-        <p style="color:#17b978; font-size:24px; font-weight:bold; margin-top:5px;">Soubré</p>
-        <p style="color:#555555; font-size:15px;">Trouvez rapidement votre officine ouverte</p>
-    </div>
-""",
+    '<div class="sous-titre">Soubré — Trouvez rapidement une pharmacie de garde</div>',
     unsafe_allow_html=True,
 )
 
-st.write("---")
+# =========================================================
+# CHOIX DE LA DATE (version corrigée, sans conflit de session_state)
+# =========================================================
+
 st.subheader("📅 Quelle date recherchez-vous ?")
+
+if "date_choisie" not in st.session_state:
+    st.session_state.date_choisie = date.today()
 
 col1, col2 = st.columns(2)
 aujourdhui = date.today()
 demain = aujourdhui + timedelta(days=1)
 
-if "date_choisie" not in st.session_state:
-    st.session_state["date_choisie"] = aujourdhui
-
 with col1:
     if st.button("📅 Aujourd'hui", use_container_width=True):
-        st.session_state["date_choisie"] = aujourdhui
+        st.session_state.date_choisie = aujourdhui
+        st.rerun()
+
 with col2:
     if st.button("📅 Demain", use_container_width=True):
-        st.session_state["date_choisie"] = demain
+        st.session_state.date_choisie = demain
+        st.rerun()
 
 date_choisie = st.date_input(
-    "Ou sélectionnez un jour précis :",
-    value=st.session_state["date_choisie"],
+    "Ou choisissez une date",
+    key="date_choisie",
     format="DD/MM/YYYY",
 )
-st.session_state["date_choisie"] = date_choisie
 
 # =========================================================
-# AFFICHAGE DE LA CARTE DE GARDE
+# AFFICHAGE DU RÉSULTAT
 # =========================================================
-st.write("---")
+
+st.divider()
+
 pharmacie = chercher_pharmacie_du_jour(date_choisie)
 
 if pharmacie:
-    # Conteneur HTML au design épuré, pro et lisible
-    card_html = f"""
-    <div style="background-color: #ffffff; border: 1px solid #dddddd; padding: 25px; border-radius: 15px; margin-bottom: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
-        <h2 style="color: #168a35; margin-top: 0px; font-size: 26px; font-weight:700;">🟢 {pharmacie["nom"]}</h2>
-        <p style="color: #168a35; font-weight: 600; font-size: 15px; margin-bottom: 20px;">✓ Officine de garde active</p>
-        <p style="color: #2c3e50; font-size: 16px; margin: 8px 0;">📍 <b>Adresse :</b> {pharmacie["adresse"]}</p>
-        <p style="color: #2c3e50; font-size: 16px; margin: 8px 0;">🕐 <b>Horaires :</b> {pharmacie["horaires"]}</p>
-        <p style="color: #2c3e50; font-size: 16px; margin: 8px 0;">📞 <b>Téléphone :</b> {pharmacie["telephone"]}</p>
+    html_carte = f"""
+    <div class="carte-pharmacie">
+        <div class="statut">✓ Pharmacie de garde</div>
+        <div class="nom-pharmacie">🟢 {pharmacie["nom"]}</div>
+        <div class="information">📍 <b>Adresse :</b> {pharmacie["adresse"]}</div>
+        <div class="information">🕐 <b>Horaires :</b> {pharmacie["horaires"]}</div>
+        <div class="information">📞 <b>Téléphone :</b> {pharmacie["telephone"]}</div>
     </div>
     """
-    st.markdown(card_html.replace("\n", ""), unsafe_allow_html=True)
+    st.markdown(html_carte.replace("\n", ""), unsafe_allow_html=True)
 
-    # Paramétrage des boutons d'actions mobiles
     adresse_recherche = quote(pharmacie["adresse"] + ", Soubré")
-    url_itineraire = (
-        f"https://google.com{adresse_recherche}"
-    )
+    url_itineraire = f"https://www.google.com/maps/search/?api=1&query={adresse_recherche}"
 
-    btn_col1, btn_col2 = st.columns(2)
-    with btn_col1:
-        st.link_button(
-            "📞 Appeler l'officine",
-            f"tel:{pharmacie['telephone']}",
-            use_container_width=True,
-        )
-    with btn_col2:
-        st.link_button(
-            "📍 Lancer l'itinéraire", url_itineraire, use_container_width=True
-        )
+    col1, col2 = st.columns(2)
+    with col1:
+        st.link_button("📞 Appeler", "tel:" + pharmacie["telephone"], use_container_width=True)
+    with col2:
+        st.link_button("📍 Itinéraire", url_itineraire, use_container_width=True)
 else:
-    st.warning(
-        "⚠️ Aucune pharmacie de garde enregistrée pour cette date spécifique dans la base."
-    )
+    st.warning("Aucune pharmacie de garde n'est encore renseignée pour cette date.")
 
 # =========================================================
-# ESPACE ADMINISTRATION SECRÈTE
+# ESPACE ADMINISTRATEUR SÉCURISÉ
 # =========================================================
-st.write("---")
+
+st.divider()
+
 mot_de_passe = st.text_input(
-    "⚙️ Accès administration",
-    type="password",
-    placeholder="Entrez le code secret pour ajouter une garde",
+    "⚙️ Accès administration", type="password", placeholder="Entrez le code pour ajouter une pharmacie"
 )
 
-if mot_de_passe == "Soubre2026":
-    st.success("🔓 Mode éditeur actif")
-    with st.form("ajout_pharmacie", clear_on_submit=True):
-        st.write("### ➕ Ajouter un créneau de garde")
-        n_date = st.date_input("Date de la garde", date.today())
-        n_nom = st.text_input("Nom de la pharmacie")
-        n_tel = st.text_input("Téléphone")
-        n_adr = st.text_input("Adresse")
-        n_hor = st.text_input("Horaires d'ouverture", value="08h00 - 22h00")
+if mot_de_passe == st.secrets["mot_de_passe_admin"]:
+    st.success("🔓 Accès autorisé")
 
-        if st.form_submit_button(
-            "💾 Sauvegarder dans la base de données", use_container_width=True
-        ):
-            if n_nom and n_tel and n_adr:
-                conn = sqlite3.connect("pharmacies_soubre.db")
-                cursor = conn.cursor()
-                cursor.execute(
-                    "INSERT OR REPLACE INTO gardes VALUES (?, ?, ?, ?, ?)",
-                    (n_date.strftime("%Y-%m-%d"), n_nom, n_tel, n_adr, n_hor),
+    with st.container():
+        st.write("Ajoutez une nouvelle pharmacie de garde :")
+
+        nouvelle_date = st.date_input("Date de la garde", date.today(), key="nouv_date")
+        nouveau_nom = st.text_input("Nom de la pharmacie", placeholder="Pharmacie...")
+        nouveau_tel = st.text_input("Téléphone", placeholder="+225...")
+        nouvelle_adresse = st.text_input("Adresse", placeholder="Quartier...")
+        nouveaux_horaires = st.text_input("Horaires", value="08h00 - 22h00")
+
+        if st.button("💾 Enregistrer", use_container_width=True):
+            if nouveau_nom and nouveau_tel and nouvelle_adresse:
+                enregistrer_pharmacie(
+                    nouvelle_date, nouveau_nom, nouveau_tel, nouvelle_adresse, nouveaux_horaires
                 )
-                conn.commit()
-                conn.close()
-                st.success("🎉 Données enregistrées avec succès !")
+                st.success(f"✅ Enregistré avec succès pour le {nouvelle_date} !")
                 st.rerun()
             else:
-                st.error("Veuillez remplir tous les champs.")
+                st.error("⚠️ Veuillez remplir tous les champs.")
+elif mot_de_passe:
+    st.error("❌ Mot de passe incorrect")
 
 # =========================================================
 # INFORMATIONS & PIED DE PAGE
@@ -224,7 +307,7 @@ st.markdown(
     """
     <div class="information-importante">
     ℹ️ <b>Information importante</b><br><br>
-    Les informations affichées sont données à titre de prototype. 
+    Les informations affichées sont données à titre de prototype.
     Elles devront être vérifiées et mises à jour régulièrement avant une utilisation réelle.
     </div>
     """,
@@ -233,5 +316,3 @@ st.markdown(
 
 st.markdown("---")
 st.caption("Prototype — Pharmacies de garde de Soubré")
-
-
