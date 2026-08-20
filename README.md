@@ -1,2 +1,1 @@
-# pharmacie-Soubre
-💊 Pharmacies de Garde - SoubréApplication Python/Streamlit pour trouver la pharmacie ouverte en temps réel à Soubré [2026-08-18].Recherche : Date du jour, demain ou calendrier [2026-08-18].Actions : Appel direct et itinéraire GPS Google Maps.Admin : Espace caché par mot de passe pour ajouter les gardes via SQLite [2026-08-18].
+Application Python/Streamlit pour trouver une pharmacie de garde à Soubré (Côte d'Ivoire) en temps réel. Recherche par date, appel direct et itinéraire Google Maps. Espace pharmaciens sécurisé (authentification) pour gérer leurs périodes de garde. Base de données PostgreSQL (Supabase).
